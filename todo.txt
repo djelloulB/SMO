@@ -1,0 +1,57 @@
+# SMO Project TODO
+
+## Phase 1 — MVP (LinkedIn, text-only)
+
+- [ ] Implement LinkedIn connector with OAuth
+- [ ] Implement LinkedIn post publishing
+- [ ] Add content ingestion from RSS
+- [ ] Add CLI commands for workflow
+- [ ] Write tests for connector
+- [ ] Security validation
+- [ ] Documentation updates
+
+## Phase 2
+
+- [ ] Implement WordPress connector
+- [ ] Implement X connector
+- [ ] Add image generation support (DALL-E)
+- [ ] Add MCP server implementation
+- [ ] Add Synology deployment documentation
+- [ ] Implement scheduling with APScheduler
+- [ ] Add metrics collection
+
+## Phase 3
+
+- [ ] Add TikTok connector
+- [ ] Add Instagram/Facebook Reels support
+- [ ] Add YouTube Shorts connector
+- [ ] Implement self-optimizing schedule
+- [ ] Add admin MCP tools
+- [ ] Implement webhook support (optional)
+- [ ] Multi-account support
+
+## Security (Ongoing)
+
+- [ ] Rec-001: Implement key file loading
+- [ ] Rec-002: Test immutable security layer
+- [ ] Rec-003: Verify no secrets in Docker image
+- [ ] Rec-004: Test OAuth CSRF protection
+- [ ] Rec-005: Test SSRF guard
+- [ ] Rec-006: Test path confinement
+- [ ] Rec-007: Verify secret redaction in logs
+- [ ] Rec-008: Verify audit log append-only
+
+## Documentation
+
+- [ ] Complete user guide
+- [ ] API documentation
+- [ ] Troubleshooting guide
+- [ ] Video tutorials
+
+## Infrastructure
+
+- [ ] CI/CD pipeline
+- [ ] Automated tests
+- [ ] Code quality checks
+- [ ] Security scanning
+- [ ] Release automation

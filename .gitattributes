@@ -1,0 +1,52 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Python
+*.py text eol=lf
+*.pyc text eol=lf
+*.pyd text eol=lf
+*.pyo text eol=lf
+__pycache__/* text eol=lf
+
+# Markdown
+*.md text eol=lf
+
+# YAML
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# JSON
+*.json text eol=lf
+
+# TOML
+*.toml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Makefiles
+Makefile text eol=lf
+*.mk text eol=lf
+
+# Documents
+*.txt text eol=lf
+*.md text eol=lf
+
+# Docker
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+
+# Hide all binary files
+* -diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.tar.gz binary
+*.rar binary

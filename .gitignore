@@ -1,0 +1,78 @@
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Environment variables (NEVER commit real secrets)
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Data and secrets
+*.db
+*.db-*
+*.db-shm
+*.db-wal
+data/
+logs/
+media/
+secrets/
+*_credentials.txt
+*.key
+*.pem
+*.crt
+*.p12
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# CI/CD
+.github/workflows/
+
+# Temporary files
+*.tmp
+*.bak
+*.backup

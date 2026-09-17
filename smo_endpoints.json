@@ -1,0 +1,16 @@
+{
+    "endpoints": {
+        "docs": "/docs",
+        "health": "/healthz",
+        "oauth": "/oauth/{platform}",
+        "oauth_callback": "/oauth/{platform}/callback",
+        "redoc": "/redoc"
+    },
+    "security": {
+        "budget_per_day_usd": 1.5,
+        "dry_run": true,
+        "human_gate": true
+    },
+    "service": "SMO (Social Media Orchestrator)",
+    "version": "0.1.0"
+}
