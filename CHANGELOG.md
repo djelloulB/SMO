@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the newest snapshot of each post, per platform, with a 30-day exponential decay;
   hours with fewer than 3 posts are ignored. The scheduler exploits the best hour and
   explores another daytime hour 15% of the time, so the ranking keeps learning.
+- **Dashboard human gate** (`smo/server/api.py`, `smo/frontend/src/pages/Posts.tsx`):
+  `/api/v1/posts` now lists the real `content_items` (filterable by `status` and
+  `platform`), and `POST /posts/{id}/approve` / `reject` require the
+  `X-Dashboard-Token` header matching `SMO_DASHBOARD_TOKEN` (503 when unset, 401 when
+  wrong). Actions are audited in `audit_actions` with the `dashboard` actor. The Posts
+  page gains an *Awaiting approval* tab and the approve/reject buttons.
 - **Draft generation** (`smo/content/generator.py`): local Ollama through
   `langchain-ollama`, prompt built from the brand voice and platform limits, output
   moderated and kept as a draft.
@@ -129,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   migrated automatically at startup.
 - Automated test suite (`tests/`) covering settings, immutable security layer,
   audit log, redaction, path confinement, SSRF guard, LinkedIn connector,
-  dashboard API, OAuth routes, content workflow and CLI (99 tests, ~77% coverage).
+  dashboard API, OAuth routes, content workflow and CLI (238 tests, ~82% coverage).
 - `SMO_DB_PATH` environment variable to configure the SQLite database location.
 - LinkedIn publishing as an organization page (`--organization-id`,
   `--author-urn`) and `smo linkedin-orgs` command.

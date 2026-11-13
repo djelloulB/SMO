@@ -176,6 +176,12 @@ With `DRY_RUN=true` (default), the exact outbound LinkedIn payload is written
 to `data/dryrun/` instead of being sent. `DRY_RUN` and `HUMAN_GATE` are frozen
 at startup and cannot be changed by any runtime tool (REC-002).
 
+The human gate is also available in the web dashboard: open `/posts`, select
+**Awaiting approval**, paste `SMO_DASHBOARD_TOKEN` in the *Dashboard token* field,
+then approve or reject. Every action is recorded in `audit_actions` with the
+`dashboard` actor. If the variable is not set, the endpoints answer 503 and the
+buttons cannot act; the CLI and MCP paths keep working.
+
 ## Scheduling and publication
 
 Approved content can be queued for a later time. The dispatcher runs inside the

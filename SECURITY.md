@@ -114,6 +114,12 @@ These are wired into the **scaffold**, not added later. Each references the audi
 | Scheduling windows, brand voice, sources | ❌ No | `content`/`admin` | `set_config` (allowlisted) |
 | Platform enable/pause | ❌ No | `control` | `pause_platform` / `resume_platform` |
 
+Dashboard mutations (`POST /api/v1/posts/{id}/approve|reject`) require the
+`X-Dashboard-Token` header matching `SMO_DASHBOARD_TOKEN`, compared in constant
+time. When the variable is unset the endpoints answer `503`, so an unauthenticated
+dashboard cannot change content. Approvals are audited as the `dashboard` actor
+(REC-008). Read endpoints stay public but never return tokens or secrets.
+
 ---
 
 ## 4. Per-Connector Requirements
