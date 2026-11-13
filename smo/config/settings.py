@@ -3,8 +3,13 @@ import base64
 import os
 from typing import Literal, Optional
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env into os.environ so that modules using os.getenv() (connectors, stores)
+# see the same configuration as pydantic-settings. Existing env vars win.
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -13,8 +18,13 @@ class Settings(BaseSettings):
     public_base_url: str = Field(default="http://localhost:8023")
     llm_default: Literal["ollama/llama3.1", "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"] = "ollama/llama3.1"
     llm_providers: dict = Field(default_factory=dict)
+    dry_run: bool = True
+    human_gate: bool = True
     budget_per_day_usd: float = Field(default=1.5, ge=0, le=100)
     brand_voice: dict = Field(default_factory=dict)
+    brand_voice_tone: Optional[str] = None
+    brand_voice_emojis: bool = False
+    brand_voice_banned_topics: list[str] = Field(default_factory=list)
     accounts: dict = Field(default_factory=dict)
     sources: list = Field(default_factory=list)
     comment_access: bool = False
@@ -24,6 +34,10 @@ class Settings(BaseSettings):
     mcp_trusted_proxy: Optional[str] = None
     smo_master_key: Optional[str] = None
     smo_master_key_path: Optional[str] = None
+    smo_dashboard_token: Optional[str] = Field(
+        default=None,
+        description="Token required for dashboard mutations (approve/reject). Unset disables them.",
+    )
     oauth_state_secret: str = Field(
         default_factory=lambda: os.urandom(32).hex(),
         description="Secret for CSRF state validation (REC-004)"

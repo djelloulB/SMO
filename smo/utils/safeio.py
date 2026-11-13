@@ -37,9 +37,10 @@ def sanitize_filename(filename: str) -> str:
     Returns:
         Sanitized filename with only safe characters.
     """
-    # Remove path separators and control chars
+    # Remove path separators and control chars, then strip leading/trailing
+    # dots and underscores (no hidden files, no Windows trailing-dot issues).
     sanitized = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)
-    sanitized = sanitized.strip("_")
+    sanitized = sanitized.strip("._")
 
     # Ensure non-empty
     if not sanitized:
@@ -64,12 +65,13 @@ def normalize_path(base: Path, user_path: str) -> Path:
     Returns:
         Normalized Path inside base.
     """
-    # Resolve relative to base
-    normalized = (base / user_path).resolve()
+    # Resolve relative to base (both sides must be absolute for comparison)
+    base_resolved = base.resolve()
+    normalized = (base_resolved / user_path).resolve()
 
     # Ensure it's inside base
     try:
-        normalized.relative_to(base)
+        normalized.relative_to(base_resolved)
     except ValueError:
         raise ValueError(
             f"Path '{user_path}' resolved outside base directory '{base}'. "
@@ -121,6 +123,40 @@ def get_safe_path(
             normalized = normalized.with_name(safe_name)
 
     return normalized
+
+
+def resolve_media_ref(media_ref: str, base: Optional[Path] = None) -> Path:
+    """
+    Resolve a stored media reference to a readable file inside the media directory.
+
+    Values in the database are not trusted: a tampered row must not turn into an
+    arbitrary file read (REC-006). Anything outside ``base`` is refused.
+
+    Args:
+        media_ref: Path stored in ``variants.media_ref``
+        base: Confinement boundary (defaults to ``BASE_OUTPUT_DIR``)
+
+    Returns:
+        Absolute path to an existing file inside ``base``.
+
+    Raises:
+        ValueError: The path is outside ``base`` or does not exist.
+    """
+    directory = (base or BASE_OUTPUT_DIR).resolve()
+    candidate = Path(media_ref)
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    resolved = candidate.resolve()
+
+    try:
+        resolved.relative_to(directory)
+    except ValueError:
+        raise ValueError(
+            f"media reference '{media_ref}' is outside the media directory. See SECURITY.md REC-006."
+        )
+    if not resolved.is_file():
+        raise ValueError(f"media reference '{media_ref}' does not point to a file")
+    return resolved
 
 
 def ensure_safe_write(filepath: Path, content: bytes, permissions: int = 0o644) -> None:

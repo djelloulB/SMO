@@ -56,7 +56,7 @@ This document provides a detailed technical architecture for SMO.
 - **Components:**
   - `smo.config` — Configuration management (REC-001)
   - `smo.services` — Business logic services
-  - `smo.mcp_server` — MCP server (Phase 2+)
+  - `smo.mcp_server` — MCP server: stdio and HTTP `/mcp`, one instance per agent key (see `docs/MCP.md`)
 
 ### 3. Business Logic Layer
 - **Purpose:** Implement business rules
@@ -207,7 +207,7 @@ class AuditLogger:
 3. Generate content (if not provided)
 4. Create draft in SQLite
 5. Store audit log (REC-008)
-6. Schedule job (APScheduler)
+6. Queue a job in the `jobs` table; the APScheduler dispatcher publishes it when due (see `docs/SCHEDULING.md`)
 7. Execute job
 8. Call connector.publish_post()
 9. Connector validates SSRF (REC-005)

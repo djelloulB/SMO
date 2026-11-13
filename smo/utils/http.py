@@ -2,18 +2,21 @@
 SSRF-guarded HTTP client (REC-005).
 Blocks private/loopback/link-local/metadata ranges from outbound requests.
 """
+import asyncio
+import socket
 from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address, AddressValueError
 from typing import Optional
 
 import httpx
 
 
-# Private IPv4 ranges (RFC 1918)
+# Private IPv4 ranges (RFC 1918) + link-local/metadata range
 PRIVATE_IPV4_RANGES = frozenset(
     [
         ip_network("10.0.0.0/8"),
         ip_network("172.16.0.0/12"),
         ip_network("192.168.0.0/16"),
+        ip_network("169.254.0.0/16"),  # Link-local (incl. 169.254.169.254 metadata)
     ]
 )
 
@@ -28,14 +31,13 @@ PRIVATE_IPV6_RANGES = frozenset(
 # Metadata IP (AWS, Azure, GCP)
 METADATA_IP = ip_address("169.254.169.254")
 
-# Loopback (can block but we want it for some internal calls; we block it in DNS resolution, not in binding)
-# We'll block it when checking resolved addresses
-LOOPBACK_IPS = frozenset(
+# Loopback / unspecified networks (blocked when checking resolved addresses)
+LOOPBACK_NETWORKS = frozenset(
     [
         ip_network("127.0.0.0/8"),
         ip_network("0.0.0.0/8"),
-        ip_address("::1"),
-        ip_address("::"),
+        ip_network("::1/128"),
+        ip_network("::/128"),
     ]
 )
 
@@ -65,14 +67,19 @@ class SSRFGuard:
         """
         parsed = httpx.URL(url)
         hostname = parsed.host
+        if not hostname:
+            raise ValueError(f"URL '{url}' has no hostname")
 
-        # If allowlist is set, only allow listed domains
+        # If allowlist is set, only allow listed domains (exact or subdomain match)
         if self.allowlist:
-            domain_allowed = any(hostname.endswith(allowed) for allowed in self.allowlist)
+            domain_allowed = any(
+                hostname == allowed or hostname.endswith(f".{allowed.lstrip('.')}")
+                for allowed in self.allowlist
+            )
             if not domain_allowed:
                 raise ValueError(f"URL hostname '{hostname}' is not in the allowlist: {self.allowlist}")
 
-        # Resolve hostname to IP addresses
+        # Resolve hostname to IP addresses (fail closed on resolution errors)
         try:
             resolved_ips = await self._resolve_hostname(hostname)
         except Exception as e:
@@ -90,22 +97,18 @@ class SSRFGuard:
 
     async def _resolve_hostname(self, hostname: str) -> list[IPv4Address | IPv6Address]:
         """
-        Resolve hostname to IP addresses using httpx's built-in resolution.
-        This is more reliable than raw socket calls in Python.
+        Resolve hostname to IP addresses using the standard resolver.
+
+        Resolution failures propagate (fail closed): an unresolvable host must
+        not be allowed through the guard.
         """
-        try:
-            addresses = await httpx.getaddrinfo(hostname, None)
-        except Exception:
-            # If resolution fails, assume it's a valid host name (maybe local)
-            # For now, we'll not block based on failed resolution
-            return []
+        addresses = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
 
         ips = []
-        for family, _, _, _, sockaddr in addresses:
+        for _family, _type, _proto, _canonname, sockaddr in addresses:
             ip_str = sockaddr[0]
             try:
-                ip = ip_address(ip_str)
-                ips.append(ip)
+                ips.append(ip_address(ip_str))
             except AddressValueError:
                 # Invalid IP address, skip
                 continue
@@ -114,15 +117,13 @@ class SSRFGuard:
     def _is_private_or_loopback(self, ip: IPv4Address | IPv6Address) -> bool:
         """Check if IP is in private, loopback, or metadata range."""
         if ip.version == 4:
-            for network in PRIVATE_IPV4_RANGES:
-                if ip in network:
-                    return True
-            return ip in LOOPBACK_IPS
+            if any(ip in network for network in PRIVATE_IPV4_RANGES):
+                return True
         else:
-            for network in PRIVATE_IPV6_RANGES:
-                if ip in network:
-                    return True
-            return ip in LOOPBACK_IPS
+            if any(ip in network for network in PRIVATE_IPV6_RANGES):
+                return True
+
+        return any(ip in network for network in LOOPBACK_NETWORKS)
 
     async def __aenter__(self):
         """Initialize HTTP client on context entry."""
@@ -151,6 +152,13 @@ class SSRFGuard:
             raise RuntimeError("HTTP client not initialized. Use async context manager.")
         await self._check_url(url)
         return await self.client.post(url, **kwargs)
+
+    async def put(self, url: str, **kwargs) -> httpx.Response:
+        """PUT request with SSRF guard (binary media upload)."""
+        if self.client is None:
+            raise RuntimeError("HTTP client not initialized. Use async context manager.")
+        await self._check_url(url)
+        return await self.client.put(url, **kwargs)
 
 
 # Global SSRF guard instance (can be customized per provider)

@@ -93,19 +93,6 @@ async def linkedin_oauth_callback(
         # Save token
         connector.save_token(account_id, token)
 
-        # Also store in generic oauth_tokens table for audit
-        db = SQLiteStore()
-        with db.get_session() as session:
-            session.add(
-                LinkedInTokenStore(
-                    account_id=account_id,
-                    encrypted_token=connector._encrypt(
-                        __import__("json").dumps(token.to_dict())
-                    ),
-                )
-            )
-            session.commit()
-
         logger.info("LinkedIn OAuth completed for account %s", account_id)
 
         payload = {"platform": "linkedin", "account_id": account_id}
@@ -133,6 +120,65 @@ async def linkedin_oauth_callback(
             result="failure",
         )
         raise HTTPException(status_code=500, detail=f"Token exchange failed: {e}")
+
+
+@router.get("/x")
+async def x_oauth_start():
+    """Start X OAuth 2.0 with PKCE. Disabled unless X_ENABLED=true (paid API tiers)."""
+    from fastapi.responses import RedirectResponse
+
+    from ..connectors.x import XConnector, start_authorization, x_enabled
+
+    if not x_enabled():
+        raise HTTPException(status_code=403, detail="X is disabled (set X_ENABLED=true)")
+    connector = XConnector.from_environment()
+    if connector is None:
+        raise HTTPException(status_code=503, detail="X is not configured")
+    return RedirectResponse(start_authorization(connector))
+
+
+@router.get("/x/callback")
+async def x_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+):
+    """Finish X OAuth: check the one-time state, exchange the code and store the encrypted token."""
+    from ..connectors.x import (
+        XAuthError,
+        XConnector,
+        XTokenService,
+        consume_authorization_state,
+        x_enabled,
+    )
+
+    if not x_enabled():
+        raise HTTPException(status_code=403, detail="X is disabled (set X_ENABLED=true)")
+    if error or not code or not state:
+        raise HTTPException(status_code=400, detail="X authorization was not granted")
+    try:
+        verifier = consume_authorization_state(state)
+    except XAuthError as exc:
+        logger.warning("X OAuth callback rejected: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    connector = XConnector.from_environment()
+    if connector is None:
+        raise HTTPException(status_code=503, detail="X is not configured")
+    try:
+        token = await connector.exchange_code(code, verifier)
+        me = await connector.get_me(token.access_token)
+    except Exception as exc:  # noqa: BLE001 - never echo provider responses
+        audit_logger.log(actor_id="oauth:x", tool="oauth_x_connect", payload_hash="0" * 32, result="failure")
+        logger.error("X token exchange failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="X token exchange failed")
+
+    account_id = str(me.get("id", ""))
+    if not account_id:
+        raise HTTPException(status_code=502, detail="X did not return an account id")
+    XTokenService().save(account_id, token)
+    audit_logger.log(actor_id="oauth:x", tool="oauth_x_connect", payload_hash=hashlib.sha256(account_id.encode()).hexdigest()[:32], result="success")
+    return {"status": "connected", "account_id": account_id, "username": me.get("username")}
 
 
 @router.get("/{platform}")

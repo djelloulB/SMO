@@ -1,56 +1,53 @@
 @echo off
-REM Installation script for SMO using Podman (Windows)
-
-setlocal enabledelayedexpansion
+REM Install and start SMO with Podman (Windows, Podman machine on WSL).
+REM Uses docker-compose.yml + docker-compose.podman.yml (host networking for the Podman VM).
+setlocal
+cd /d "%~dp0"
 
 echo ==========================================
 echo Installation de SMO avec Podman
 echo ==========================================
 echo.
 
-REM Vérifier que podman est installé
 podman --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Erreur: Podman n'est pas installé.
-    echo Installez Podman Desktop pour Windows.
+if errorlevel 1 (
+    echo Erreur: Podman n'est pas installe.
+    echo Installez Podman Desktop pour Windows, puis relancez ce script.
+    exit /b 1
+)
+podman compose version >nul 2>&1
+if errorlevel 1 (
+    echo Erreur: la commande "podman compose" est indisponible.
+    echo Installez un provider compose pour Podman, puis relancez ce script.
     exit /b 1
 )
 
-echo ✓ Podman est installé: %podman --version%
-echo.
+if not exist ".env" (
+    echo Fichier .env absent: copie de .env.example.
+    copy /y ".env.example" ".env" >nul
+    echo Editez .env : SMO_MASTER_KEY, PUBLIC_BASE_URL et identifiants, puis relancez ce script.
+    exit /b 1
+)
 
-REM Construire l'image
-echo Construction de l'image Docker...
-podman build -f Dockerfile.final -t smo:latest .
-if %errorlevel% neq 0 (
-    echo Erreur lors de la construction de l'image.
+if not exist "data" mkdir "data"
+
+echo Construction et demarrage du conteneur...
+podman compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build
+if errorlevel 1 (
+    echo Erreur lors de la construction ou du demarrage.
+    echo Consultez les messages ci-dessus.
     exit /b 1
 )
 
 echo.
-echo ✓ Image construite avec succes!
+echo SMO est demarre.
+echo Healthcheck : http://localhost:8023/healthz
+echo Documentation API : http://localhost:8023/docs
+echo Sur une machine Podman WSL, l'adresse peut etre celle de la VM par exemple http://172.x.x.x:8023.
 echo.
+echo Commandes utiles :
+echo   podman ps --filter name=smo        etat du conteneur
+echo   podman logs -f smo                 logs
+echo   podman compose -f docker-compose.yml -f docker-compose.podman.yml down   arret
 
-REM Lancer le conteneur
-echo Lancement du conteneur SMO...
-podman run -d --name smo --restart unless-stopped -p 8023:8023 -v "%cd%\data":/app/data -e SMO_MASTER_KEY=demo-key-please-replace-in-production smo:latest
-
-echo.
-echo ✓ Conteneur demarre avec succes!
-echo.
-echo === Information de connexion ===
-echo Port: 8023
-echo Healthcheck: http://localhost:8023/healthz
-echo Documentation API: http://localhost:8023/docs
-echo.
-echo === Verifier le conteneur ===
-podman logs smo
-echo.
-echo === Arreter le conteneur ===
-echo podman stop smo
-echo.
-echo === Démarrer le conteneur ===
-echo podman start smo
-echo.
-echo === Voir les logs ===
-echo podman logs -f smo
+endlocal

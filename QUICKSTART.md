@@ -234,18 +234,20 @@ PUBLIC_BASE_URL=http://localhost:8024
 
 ---
 
-## Docker Deployment (Optional)
+## Container Deployment (Optional)
+
+Podman is the supported container runtime. On a Windows/WSL Podman machine, add
+the override file that uses host networking (`docker-compose.podman.yml`).
 
 ```bash
-# Build image
-docker-compose build
-
-# Run container
-docker-compose up -d
+# Build and run
+podman compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build
 
 # Check logs
-docker-compose logs -f
+podman logs -f smo
 ```
+
+On Synology (Container Manager), use `docker-compose.yml` alone.
 
 ---
 

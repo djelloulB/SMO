@@ -3,6 +3,8 @@ Append-only audit logger with tamper-evident hash chaining (REC-008).
 """
 import hashlib
 import logging
+import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -45,14 +47,18 @@ class AuditLogger:
     Append-only audit logger with hash chain.
     """
 
-    def __init__(self, db_path: str = "data/smoomo.db"):
+    def __init__(self, db_path: Optional[str] = None):
         """
         Initialize audit logger.
 
         Args:
-            db_path: Path to SQLite database (WAL mode for better concurrency)
+            db_path: Path to SQLite database (WAL mode for better concurrency).
+                Defaults to the ``SMO_DB_PATH`` environment variable, then
+                ``data/smoomo.db``.
         """
-        self.db_path = Path(db_path)
+        self.db_path = Path(db_path or os.getenv("SMO_DB_PATH", "data/smoomo.db"))
+        # Serialize appends so the hash chain stays linear under concurrent writes.
+        self._write_lock = threading.Lock()
         self.engine = create_engine(
             f"sqlite:///{self.db_path}",  # WAL mode is set in post-create
             connect_args={"check_same_thread": False},
@@ -118,14 +124,23 @@ class AuditLogger:
             actor_id: Actor identifier (e.g., agent key ID, or "system")
             tool: Tool name (e.g., "publish_post", "approve_draft")
             payload_hash: Hash of the payload (simplified)
-            previous_hash: Hash of the previous audit entry (for tamper-evidence)
+            previous_hash: Hash of the previous audit entry. When omitted, the
+                current chain head is linked automatically (tamper-evidence).
             result: Result status (success, failure, blocked)
 
         Returns:
             ID of the created audit entry
         """
         try:
-            with self.SessionLocal() as session:
+            with self._write_lock, self.SessionLocal() as session:
+                if previous_hash is None:
+                    last = (
+                        session.query(AuditEntry)
+                        .order_by(AuditEntry.id.desc())
+                        .first()
+                    )
+                    previous_hash = last.payload_hash if last else None
+
                 entry = AuditEntry(
                     actor_id=actor_id,
                     tool=tool,
@@ -148,6 +163,7 @@ class AuditLogger:
         except Exception as e:
             logger.error("Failed to log audit entry: %s", e)
             # Continue anyway — audit is non-critical for MVP, but we log the error
+            return 0
 
     def get_chain_head(self) -> Optional[AuditEntry]:
         """Get the most recent audit entry (head of the chain)."""
@@ -163,23 +179,37 @@ class AuditLogger:
         """
         Verify the hash chain (tamper-evidence).
         Returns True if chain is consistent.
+
+        Entries appended before the chain was enforced (``previous_hash`` is
+        NULL for a leading run) are treated as a legacy prefix. Once chaining
+        has started, every entry must link to the previous entry's hash.
         """
         with self.SessionLocal() as session:
             entries = session.query(AuditEntry).order_by(AuditEntry.id.asc()).all()
-            expected_previous = None
 
-            for entry in entries:
-                if entry.previous_hash != expected_previous:
-                    logger.error(
-                        "Audit chain tampered: id=%d previous_hash=%s expected=%s",
-                        entry.id,
-                        entry.previous_hash,
-                        expected_previous,
-                    )
-                    return False
-                expected_previous = entry.payload_hash
+        chaining_started = False
+        expected_previous: Optional[str] = None
 
-            return True
+        for entry in entries:
+            if not chaining_started:
+                if entry.previous_hash is None:
+                    # Legacy, pre-chaining entry: no link to verify.
+                    expected_previous = entry.payload_hash
+                    continue
+                chaining_started = True
+
+            if entry.previous_hash != expected_previous:
+                logger.error(
+                    "Audit chain tampered: id=%d previous_hash=%s expected=%s",
+                    entry.id,
+                    entry.previous_hash,
+                    expected_previous,
+                )
+                return False
+
+            expected_previous = entry.payload_hash
+
+        return True
 
 
 # Global audit logger instance

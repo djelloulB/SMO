@@ -4,7 +4,7 @@ pydantic-settings>=2.0
 python-dotenv>=1.0
 
 # HTTP / Networking
-httpx>=0.27
+httpx[http2]>=0.27
 fastapi>=0.115
 uvicorn>=0.32
 
@@ -15,15 +15,18 @@ cryptography>=42
 typer>=0.12
 pyyaml>=6.0
 
+# Content ingestion
+feedparser>=6.0
+
 # Database
 sqlalchemy>=2.0
 
 # Scheduler
-apscheduler>=3.10
+apscheduler>=3.10,<4
 
 # AI (for MVP minimal, phase 2+ will add more)
 langchain-core>=0.3
 langchain-ollama>=0.3
 
 # MCP (phase 2)
-mcp>=1.0
+mcp>=1.0,<2

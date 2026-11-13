@@ -58,14 +58,26 @@ class MutableConfig:
         logger.info("Config %s updated", key)
 
 
-security_layer = SecurityLayer(
-    dry_run=True,
-    human_gate=True,
-    budget_per_day_usd=1.5,
-    mcp_scopes_read=frozenset({"read"}),
-    mcp_scopes_content=frozenset({"content"}),
-    mcp_scopes_control=frozenset(),
-    mcp_scopes_admin=frozenset(),
-)
+def build_security_layer() -> SecurityLayer:
+    """Build the immutable layer from startup configuration.
+
+    ``dry_run`` and ``human_gate`` may be set through environment variables at
+    boot, but the resulting layer is frozen: no runtime code or agent can
+    change it (REC-002).
+    """
+    from .settings import settings
+
+    return SecurityLayer(
+        dry_run=settings.dry_run,
+        human_gate=settings.human_gate,
+        budget_per_day_usd=settings.budget_per_day_usd,
+        mcp_scopes_read=frozenset({"read"}),
+        mcp_scopes_content=frozenset({"content"}),
+        mcp_scopes_control=frozenset(),
+        mcp_scopes_admin=frozenset(),
+    )
+
+
+security_layer = build_security_layer()
 
 mutable_config = MutableConfig()

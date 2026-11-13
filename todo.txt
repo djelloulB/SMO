@@ -2,44 +2,46 @@
 
 ## Phase 1 — MVP (LinkedIn, text-only)
 
-- [ ] Implement LinkedIn connector with OAuth
-- [ ] Implement LinkedIn post publishing
-- [ ] Add content ingestion from RSS
-- [ ] Add CLI commands for workflow
-- [ ] Write tests for connector
-- [ ] Security validation
-- [ ] Documentation updates
+- [x] Implement LinkedIn connector with OAuth
+- [x] Implement LinkedIn post publishing (member profile + organization page)
+- [x] Add content ingestion from RSS (RSS/Atom + local files)
+- [x] Add CLI commands for full workflow (ingest → drafts → show → approve/reject → publish)
+- [x] Write tests for connector, content pipeline and publishing
+- [x] Security validation (REC-001/002/004/005/006/007/008)
+- [x] Documentation updates (README, .env.example, CHANGELOG)
 
 ## Phase 2
 
-- [ ] Implement WordPress connector
-- [ ] Implement X connector
-- [ ] Add image generation support (DALL-E)
-- [ ] Add MCP server implementation
-- [ ] Add Synology deployment documentation
-- [ ] Implement scheduling with APScheduler
-- [ ] Add metrics collection
+- [x] Implement WordPress connector
+- [x] Implement X connector
+- [x] Add image generation support (DALL-E) - implemented with OpenAI GPT Image models, see CHANGELOG
+- [x] Attach an agent-supplied image (attach_image) and publish it with WordPress and LinkedIn
+- [x] X image publishing (upload via `/2/media/upload` with the `media.write` scope, 5 MiB limit)
+- [x] Add MCP server implementation
+- [x] Add Synology deployment documentation
+- [x] Implement scheduling with APScheduler
+- [x] Add metrics collection
 
 ## Phase 3
 
 - [ ] Add TikTok connector
 - [ ] Add Instagram/Facebook Reels support
 - [ ] Add YouTube Shorts connector
-- [ ] Implement self-optimizing schedule
-- [ ] Add admin MCP tools
+- [x] Implement self-optimizing schedule
+- [x] Add admin MCP tools
 - [ ] Implement webhook support (optional)
 - [ ] Multi-account support
 
 ## Security (Ongoing)
 
-- [ ] Rec-001: Implement key file loading
-- [ ] Rec-002: Test immutable security layer
+- [x] Rec-001: Implement key file loading
+- [x] Rec-002: Test immutable security layer
 - [ ] Rec-003: Verify no secrets in Docker image
-- [ ] Rec-004: Test OAuth CSRF protection
-- [ ] Rec-005: Test SSRF guard
-- [ ] Rec-006: Test path confinement
-- [ ] Rec-007: Verify secret redaction in logs
-- [ ] Rec-008: Verify audit log append-only
+- [x] Rec-004: Test OAuth CSRF protection
+- [x] Rec-005: Test SSRF guard
+- [x] Rec-006: Test path confinement
+- [x] Rec-007: Verify secret redaction in logs
+- [x] Rec-008: Verify audit log append-only
 
 ## Documentation
 
@@ -50,8 +52,8 @@
 
 ## Infrastructure
 
-- [ ] CI/CD pipeline
-- [ ] Automated tests
-- [ ] Code quality checks
+- [ ] CI/CD pipeline (workflows exist, need to be tracked/validated)
+- [x] Automated tests (pytest, 231 tests, 81% coverage)
+- [ ] Code quality checks (ruff/black not enforced yet)
 - [ ] Security scanning
 - [ ] Release automation

@@ -115,12 +115,11 @@ This document lists all dependencies used in SMO and explains their roles.
 ## Scheduler
 
 ### APScheduler
-- **Package:** `apscheduler>=3.10`
+- **Package:** `apscheduler>=3.10,<4` (APScheduler 4 has a different API)
 - **Purpose:** Background task scheduling
 - **Usage:**
-  - Job queue management
-  - Scheduled publishing
-  - Retry logic
+  - Periodic dispatcher of the `jobs` queue (every 30 s) and metrics poll (every 6 h)
+  - The queue itself is the `jobs` table; retry and backoff logic live in `smo/orchestrator/retry.py`
 - **Alternatives:**
   - `cron` (operating system)
   - `celery` (too heavy)
@@ -151,15 +150,16 @@ This document lists all dependencies used in SMO and explains their roles.
 
 ---
 
-## MCP (Phase 2+)
+## MCP
 
 ### MCP SDK
-- **Package:** `mcp>=1.0`
+- **Package:** `mcp>=1.0,<2` (the 2.x SDK renamed `FastMCP`; pin until the code is migrated)
+- **HTTP client:** `httpx[http2]>=0.27` (the SSRF guard uses HTTP/2; `h2` is required)
 - **Purpose:** MCP server implementation
 - **Usage:**
-  - MCP stdio server
-  - MCP HTTP server
-  - Tool and resource definitions
+  - MCP stdio server (`smo mcp`)
+  - MCP HTTP server mounted at `/mcp` (one FastMCP instance per agent key)
+  - Tool definitions; resources not implemented yet
 - **Alternatives:**
   - None (MCP is the standard)
 
@@ -259,8 +259,8 @@ pip install -r requirements.txt
 # Using Makefile
 make install
 
-# Using Docker
-docker-compose up --build
+# Using Podman
+podman compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build
 ```
 
 ---

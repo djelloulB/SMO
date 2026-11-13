@@ -4,6 +4,7 @@ Main entrypoint for SMO.
 import logging
 
 from .config import settings
+from .config.security import security_layer
 from .server.app import app as fastapi_app
 
 # Configure logging
@@ -18,7 +19,7 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("Starting SMO version %s", settings.app_version)
-    logger.info("Security layer: dry_run=%s, human_gate=%s", settings.security_controls.dry_run, settings.security_controls.human_gate)
+    logger.info("Security layer: dry_run=%s, human_gate=%s", security_layer.dry_run, security_layer.human_gate)
 
     uvicorn.run(
         "smo.server.app:app",

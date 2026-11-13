@@ -28,7 +28,7 @@
 | Insider with file-level read access to the volume | Assume can read `.env` + `smo.db` if co-located |
 
 ### 1.3 Attack surface
-1. HTTP endpoints: `/healthz`, `/oauth/{platform}/callback`, `/mcp` (Phase 2).
+1. HTTP endpoints: `/healthz`, `/oauth/{platform}/callback`, `/mcp` (bearer key per agent; Host header restricted to loopback and `PUBLIC_BASE_URL`, see `docs/MCP.md`).
 2. Outbound HTTP: RSS ingest, news API, image generation, platform APIs.
 3. Local filesystem: `data/inputs/`, `data/media/`, `data/dryrun/`.
 4. SQLite `smo.db` (WAL).
@@ -88,6 +88,8 @@ These are wired into the **scaffold**, not added later. Each references the audi
 ### REC-006 — Path confinement
 - Local source ingestion is confined under `data/inputs/`; absolute paths and any `..` component are rejected.
 - Media/draft filenames are sanitized (no separators/control chars) before write.
+- Attached images are read from `data/inputs/` only, validated by file signature (never by extension or declared type), and size-capped at 8 MiB.
+- A stored `variants.media_ref` is resolved with `resolve_media_ref()`, which refuses any path outside `data/media/` (a tampered row must not become an arbitrary file read).
 - Draft payloads (`data/dryrun/`) are written under the confined runtime dir only.
 
 ### REC-007 — Network binding + secret redaction

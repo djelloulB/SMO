@@ -46,10 +46,13 @@ class SecretRedactionFilter(logging.Filter):
     """Logging filter that redacts secrets from log records."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if hasattr(record, "msg"):
-            if isinstance(record.msg, str):
-                record.msg = redact_passwords(record.msg)
-        if hasattr(record, "args"):
-            if isinstance(record.args, tuple):
-                record.args = tuple(redact_passwords(str(arg)) if isinstance(arg, str) else arg for arg in record.args)
+        try:
+            message = record.getMessage()
+        except Exception:
+            message = str(record.msg)
+
+        record.msg = redact_passwords(message)
+        # The message is now fully formatted and redacted, so drop the args to
+        # avoid a second (and potentially failing) ``%`` interpolation.
+        record.args = ()
         return True

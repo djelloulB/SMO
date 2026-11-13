@@ -1,0 +1,10 @@
+# Override local pour Podman (machine WSL sur Windows).
+# Le NAT/port publishing de Podman ne transmet pas le port 8023 vers Windows ;
+# le host network contourne ce problème. NE PAS utiliser sur Synology.
+#
+# Usage : docker compose -f docker-compose.yml -f docker-compose.podman.yml up -d
+services:
+  smo:
+    ports: !reset []
+    network_mode: host
+    cpus: !reset null

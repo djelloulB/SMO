@@ -15,59 +15,60 @@
 - ✅ Build hygiene (REC-003)
 
 **TODO for Phase 1:**
-- [ ] Implement LinkedIn connector with OAuth
-- [ ] Implement LinkedIn post publishing
-- [ ] Add content ingestion from RSS
-- [ ] Add CLI commands for full workflow
-- [ ] Write tests for connector
-- [ ] Security validation
-- [ ] Documentation updates
+- [x] Implement LinkedIn connector with OAuth
+- [x] Implement LinkedIn post publishing (member profile + organization page)
+- [x] Add content ingestion from RSS (RSS/Atom + local files)
+- [x] Add CLI commands for full workflow (ingest → drafts → show → approve/reject → publish)
+- [x] Write tests for connector, content pipeline and publishing (99-test pytest suite)
+- [x] Security validation (REC-001/002/004/005/006/007/008)
+- [x] Documentation updates (README, .env.example, CHANGELOG)
 
 ---
 
 ## Phase 2: Expanding Functionality (Target: 3-6 months)
 
 ### 1. WordPress Connector
-- [ ] WordPress REST API integration
-- [ ] Application Password authentication
-- [ ] Post creation and publishing
-- [ ] Draft management
-- [ ] Image upload support
+- [x] WordPress REST API integration
+- [x] Application Password authentication
+- [x] Post creation and publishing
+- [ ] Draft management (the connector accepts a status, not yet exposed to the workflow)
+- [x] Image upload support (WordPress media library, LinkedIn `/rest/images`)
 
 ### 2. X (Twitter) Connector
-- [ ] API v2 integration
-- [ ] Twitter OAuth flow
-- [ ] Tweet posting
+- [x] API v2 integration
+- [x] Twitter OAuth flow (OAuth 2.0 PKCE)
+- [x] Tweet posting
 - [ ] Thread support
 - [ ] Quote tweets
-- [ ] Rate limiting handling
+- [ ] Rate limiting handling (429 is retried with backoff; no quota tracking yet)
 
 ### 3. Image Generation
-- [ ] DALL-E integration
-- [ ] Prompt-based image generation
+- [x] Image generation via OpenAI GPT Image (DALL-E models are retired)
+- [x] Prompt-based image generation
+- [x] Attach an agent-supplied image and publish it with the post (WordPress, LinkedIn)
 - [ ] Image variation
 - [ ] Multiple image providers (Stability, Midjourney placeholder)
 - [ ] Image resizing and optimization
 
 ### 4. MCP Server
-- [ ] MCP stdio server
-- [ ] MCP HTTP server
-- [ ] Tool implementation (read, content, control, admin)
+- [x] MCP stdio server
+- [x] MCP HTTP server
+- [x] Tool implementation (read, content, control, admin) — partial, see docs/MCP.md section 6
 - [ ] Resource implementation
 - [ ] Agent key management
 
 ### 5. Synology Deployment
-- [ ] Container Manager deployment guide
-- [ ] Reverse proxy configuration
-- [ ] Tailscale deployment guide
-- [ ] Scheduled tasks integration
+- [x] Container Manager deployment guide (docs/SYNOLOGY.md, not yet tested on a NAS)
+- [x] Reverse proxy configuration (scenario A, documented)
+- [x] Tailscale deployment guide (scenario B, documented)
+- [ ] Scheduled tasks integration (scheduler runs inside the container instead)
 
 ### 6. Advanced Scheduling
-- [ ] APScheduler integration
-- [ ] Multiple scheduling strategies
-- [ ] Window-based scheduling
-- [ ] Retry logic with exponential backoff
-- [ ] Circuit breaker pattern
+- [x] APScheduler integration
+- [x] Multiple scheduling strategies
+- [x] Window-based scheduling
+- [x] Retry logic with exponential backoff
+- [x] Circuit breaker pattern
 
 ---
 
@@ -92,15 +93,15 @@
 - [ ] Quota awareness
 
 ### 4. Self-Optimizing Schedule
-- [ ] Metrics collection
-- [ ] Engagement analysis
-- [ ] Time window optimization
-- [ ] Multi-platform scheduling
+- [x] Metrics collection (likes only for LinkedIn)
+- [x] Engagement analysis (newest snapshot per post, 30-day half-life, per platform)
+- [x] Time window optimization (exploit best hour, explore another daytime hour)
+- [x] Multi-platform scheduling
 
 ### 5. Admin MCP Tools
-- [ ] Configuration management
-- [ ] Token rotation
-- [ ] Health monitoring
+- [x] Configuration management (mutable keys only)
+- [x] Token rotation (LinkedIn access token refresh)
+- [x] Health monitoring (`get_health` with platform states)
 - [ ] Batch operations
 
 ### 6. Multi-Account Support
@@ -173,7 +174,7 @@
 
 | Phase | Status | Progress | Timeline |
 |---|---|---|---|
-| Phase 1: MVP | 🚧 In Progress | 60% | Current |
+| Phase 1: MVP | 🚧 In Progress | 85% | Current |
 | Phase 2: Expansion | 📅 Planned | 0% | 3-6 months |
 | Phase 3: Video | 📅 Planned | 0% | 6-12 months |
 | Phase 4: Advanced | 🔮 Future | 0% | 12+ months |

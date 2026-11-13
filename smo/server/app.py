@@ -1,6 +1,7 @@
 """Main FastAPI application with binding, healthcheck, and redaction (REC-007)."""
 import logging
 import uuid
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
@@ -8,13 +9,21 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..config.security import security_layer
+from ..config.settings import settings
+from ..mcp_server.http import MCP_PATH, MCPHttpGateway
+from ..mcp_server.server import build_server
 from ..memory.sqlite_store import SQLiteStore
+from ..orchestrator.scheduler import start_scheduler, stop_scheduler
 from ..security.audit import audit_logger
 from ..utils.redact import SecretRedactionFilter, redact_dict
 from .api import router as api_router
 from .oauth import router as oauth_router
 
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+
+def build_mcp_gateway() -> MCPHttpGateway:
+    return MCPHttpGateway.from_environment(build_server)
 
 # Configure logging with redaction
 logging.basicConfig(
@@ -28,16 +37,32 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    gateway = build_mcp_gateway() if settings.mcp_enabled else None
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        start_scheduler()
+        try:
+            async with AsyncExitStack() as stack:
+                if gateway is not None:
+                    await stack.enter_async_context(gateway.lifespan())
+                yield
+        finally:
+            stop_scheduler()
+
     app = FastAPI(
         title="SMO (Social Media Orchestrator)",
         version="0.1.0",
         description="Autonomous social media orchestration agent with built-in security.",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     app.include_router(oauth_router, prefix="/oauth", tags=["oauth"])
     app.include_router(api_router)
+    if gateway is not None:
+        app.add_route(MCP_PATH, gateway)
 
     @app.get("/healthz")
     async def healthcheck() -> dict:
@@ -61,8 +86,11 @@ def create_app() -> FastAPI:
         return redact_dict(payload)
 
     @app.get("/")
-    async def root() -> dict:
-        """Root endpoint with API info."""
+    async def root():
+        """Serve the dashboard if built, otherwise return API info."""
+        index_file = _FRONTEND_DIST / "index.html"
+        if index_file.is_file():
+            return FileResponse(index_file)
         return redact_dict(
             {
                 "service": "SMO (Social Media Orchestrator)",

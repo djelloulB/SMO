@@ -7,16 +7,17 @@ import os
 import secrets
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from cryptography.fernet import Fernet
 
 from ..config.security import security_layer
-from ..config.settings import load_master_key
+from ..config.settings import load_master_key, settings
 from ..memory.sqlite_store import SQLiteStore
+from ..utils.http import SSRFGuard
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,17 @@ logger = logging.getLogger(__name__)
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_API_BASE = "https://api.linkedin.com/v2"
-LINKEDIN_SCOPES = "r_liteprofile r_emailaddress w_member_social"
+LINKEDIN_USERINFO_URL = f"{LINKEDIN_API_BASE}/userinfo"
+LINKEDIN_IMAGES_URL = f"{LINKEDIN_API_BASE}/rest/images"
+LINKEDIN_SCOPES = (
+    "openid profile email w_member_social w_organization_social r_organization_admin"
+)
+# Versioned APIs (rest/images) require a LinkedIn-Version header. LinkedIn keeps a
+# version available for at least a year, so pin one and allow an env override.
+DEFAULT_LINKEDIN_API_VERSION = "202601"
+# Upload URLs come from an authenticated LinkedIn response; only LinkedIn hosts are accepted.
+LINKEDIN_UPLOAD_HOST_SUFFIXES = (".licdn.com",)
+LINKEDIN_UPLOAD_HOSTS = {"api.linkedin.com", "www.linkedin.com"}
 
 
 @dataclass
@@ -152,15 +163,159 @@ class LinkedInConnector:
     async def get_profile(self, token: LinkedInToken) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
             headers = {"Authorization": f"{token.token_type} {token.access_token}"}
-            response = await client.get(f"{LINKEDIN_API_BASE}/me", headers=headers)
+            response = await client.get(LINKEDIN_USERINFO_URL, headers=headers)
             response.raise_for_status()
-            return response.json()
+            profile = response.json()
+            if "id" not in profile and "sub" in profile:
+                profile["id"] = profile["sub"]
+            return profile
 
-    async def publish_post(self, token: LinkedInToken, text: str, visibility: str = "PUBLIC") -> dict:
-        """Publish a text post to LinkedIn (UGC Post API)."""
-        # First get the author URN
-        profile = await self.get_profile(token)
-        author_urn = f"urn:li:person:{profile['id']}"
+    async def get_administered_organizations(self, token: LinkedInToken) -> list[dict]:
+        """List LinkedIn pages the authenticated member can publish to.
+
+        Requires the ``r_organization_admin`` scope (Community Management API).
+        Returns a list of ``{"urn": "urn:li:organization:...", "id": "..."}``.
+        """
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {
+                "Authorization": f"{token.token_type} {token.access_token}",
+                "X-Restli-Protocol-Version": "2.0.0",
+            }
+            response = await client.get(
+                f"{LINKEDIN_API_BASE}/organizationalEntityAcls",
+                params={"q": "roleAssignee"},
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        organizations: list[dict] = []
+        for element in data.get("elements", []):
+            urn = element.get("organizationalEntity")
+            if not urn:
+                continue
+            organizations.append(
+                {
+                    "urn": urn,
+                    "id": urn.rsplit(":", 1)[-1],
+                    "role": element.get("role"),
+                    "state": element.get("state"),
+                }
+            )
+        return organizations
+
+    @staticmethod
+    def resolve_author_urn(
+        author_urn: Optional[str] = None,
+        organization_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """Build the author URN for person or organization posts."""
+        if author_urn:
+            return author_urn
+        if organization_id:
+            if organization_id.startswith("urn:li:"):
+                return organization_id
+            return f"urn:li:organization:{organization_id}"
+        return None
+
+    _resolve_author_urn = resolve_author_urn
+
+    @property
+    def api_version(self) -> str:
+        return os.getenv("LINKEDIN_API_VERSION", "").strip() or DEFAULT_LINKEDIN_API_VERSION
+
+    def _rest_headers(self, token: LinkedInToken, content_type: Optional[str] = "application/json") -> dict:
+        headers = {
+            "Authorization": f"{token.token_type} {token.access_token}",
+            "X-Restli-Protocol-Version": "2.0.0",
+            "LinkedIn-Version": self.api_version,
+        }
+        if content_type:
+            headers["Content-Type"] = content_type
+        return headers
+
+    async def upload_image(self, token: LinkedInToken, author_urn: str, data: bytes) -> str:
+        """Register an image and upload its bytes; returns the image URN for a post."""
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{LINKEDIN_IMAGES_URL}?action=initializeUpload",
+                headers=self._rest_headers(token),
+                json={"initializeUploadRequest": {"owner": author_urn}},
+            )
+            response.raise_for_status()
+            value = (response.json() or {}).get("value") or {}
+
+        upload_url = value.get("uploadUrl")
+        image_urn = value.get("image")
+        if not upload_url or not image_urn:
+            raise ValueError("LinkedIn returned no upload URL or image URN")
+
+        host = urlparse(upload_url).hostname or ""
+        if host not in LINKEDIN_UPLOAD_HOSTS and not host.endswith(LINKEDIN_UPLOAD_HOST_SUFFIXES):
+            raise ValueError(f"LinkedIn returned an unexpected upload host '{host}'")
+
+        async with SSRFGuard(allowlist={host}) as guard:
+            uploaded = await guard.put(
+                upload_url,
+                content=data,
+                headers={
+                    "Authorization": f"{token.token_type} {token.access_token}",
+                    "Content-Type": "application/octet-stream",
+                },
+            )
+        uploaded.raise_for_status()
+        return image_urn
+
+    @staticmethod
+    def build_post_payload(
+        author_urn: str,
+        text: str,
+        visibility: str = "PUBLIC",
+        image_urn: Optional[str] = None,
+    ) -> dict:
+        """Build the exact LinkedIn UGC Post payload (used for publish/dry-run)."""
+        if author_urn.startswith("urn:li:organization:"):
+            visibility = "PUBLIC"
+        share = {
+            "shareCommentary": {"text": text},
+            "shareMediaCategory": "NONE",
+        }
+        if image_urn:
+            share["shareMediaCategory"] = "IMAGE"
+            share["media"] = [{"status": "READY", "media": image_urn}]
+        return {
+            "author": author_urn,
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {"com.linkedin.ugc.ShareContent": share},
+            "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": visibility},
+        }
+
+    async def publish_post(
+        self,
+        token: LinkedInToken,
+        text: str,
+        visibility: str = "PUBLIC",
+        organization_id: Optional[str] = None,
+        author_urn: Optional[str] = None,
+        image_data: Optional[bytes] = None,
+    ) -> dict:
+        """Publish a post to LinkedIn (UGC Post API), optionally with one image.
+
+        Without ``organization_id``/``author_urn`` the post is published on the
+        authenticated member's profile. With either of them it is published on
+        behalf of that organization (the member must be a page admin and the
+        token must include ``w_organization_social``).
+        """
+        resolved_author = self.resolve_author_urn(author_urn, organization_id)
+        if not resolved_author:
+            profile = await self.get_profile(token)
+            resolved_author = f"urn:li:person:{profile['id']}"
+
+        image_urn = None
+        if image_data:
+            image_urn = await self.upload_image(token, resolved_author, image_data)
+
+        payload = self.build_post_payload(resolved_author, text, visibility, image_urn)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             headers = {
@@ -168,22 +323,39 @@ class LinkedInConnector:
                 "Content-Type": "application/json",
                 "X-Restli-Protocol-Version": "2.0.0",
             }
-            payload = {
-                "author": author_urn,
-                "lifecycleState": "PUBLISHED",
-                "specificContent": {
-                    "com.linkedin.ugc.ShareContent": {
-                        "shareCommentary": {"text": text},
-                        "shareMediaCategory": "NONE",
-                    }
-                },
-                "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": visibility},
-            }
             response = await client.post(
                 f"{LINKEDIN_API_BASE}/ugcPosts", headers=headers, json=payload
             )
             response.raise_for_status()
-            return response.json()
+            # LinkedIn usually answers 201 with an empty body and the id in a header.
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            if not body.get("id"):
+                body["id"] = response.headers.get("x-restli-id")
+            return body
+
+    async def fetch_metrics(self, token: LinkedInToken, post_urn: str) -> dict:
+        """Read engagement for one post (read-only, FR-13).
+
+        Only likes are available through the social actions endpoint. Views and
+        reach need organization analytics (``r_organization_social``), so they
+        are reported as 0 until that access is granted.
+        """
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {
+                "Authorization": f"{token.token_type} {token.access_token}",
+                "X-Restli-Protocol-Version": "2.0.0",
+            }
+            response = await client.get(
+                f"{LINKEDIN_API_BASE}/socialActions/{quote(post_urn, safe='')}",
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+        likes = int((data.get("likesSummary") or {}).get("totalLikes", 0))
+        return {"likes": likes, "views": 0, "reach": 0}
 
     # --- Token persistence ---
     def save_token(self, account_id: str, token: LinkedInToken) -> None:
@@ -197,7 +369,7 @@ class LinkedInConnector:
                     INSERT OR REPLACE INTO linkedin_tokens (account_id, encrypted_token, updated_at)
                     VALUES (:account_id, :encrypted_token, :updated_at)
                 """),
-                {"account_id": account_id, "encrypted_token": encrypted, "updated_at": datetime.utcnow().isoformat()},
+                {"account_id": account_id, "encrypted_token": encrypted, "updated_at": datetime.now(timezone.utc).isoformat()},
             )
             session.commit()
 
@@ -227,7 +399,14 @@ def get_linkedin_connector() -> Optional[LinkedInConnector]:
     """Factory to create connector from env config."""
     client_id = os.getenv("LINKEDIN_CLIENT_ID")
     client_secret = os.getenv("LINKEDIN_CLIENT_SECRET") or os.getenv("LINKEDIN_PRIMARY_CLIENT_SECRET")
-    redirect_uri = os.getenv("LINKEDIN_REDIRECT_URI", "http://172.24.131.28:8023/oauth/linkedin/callback")
+    default_redirect = f"{settings.public_base_url.rstrip('/')}/oauth/linkedin/callback"
+    redirect_uri = os.getenv("LINKEDIN_REDIRECT_URI") or default_redirect
+    if not redirect_uri.endswith("/callback"):
+        logger.warning(
+            "LINKEDIN_REDIRECT_URI does not look like an OAuth callback, using %s",
+            default_redirect,
+        )
+        redirect_uri = default_redirect
     if not client_id or not client_secret:
         return None
     return LinkedInConnector(client_id, client_secret, redirect_uri)
