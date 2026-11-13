@@ -10,6 +10,7 @@ from ..connectors.linkedin import LinkedInConnector, get_linkedin_connector
 from ..config.settings import settings
 from ..memory.sqlite_store import LinkedInTokenStore, SQLiteStore
 from ..security.audit import audit_logger
+from ..services.account_service import AccountService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,6 +93,19 @@ async def linkedin_oauth_callback(
 
         # Save token
         connector.save_token(account_id, token)
+
+        label = profile.get("name") or " ".join(
+            part for part in (profile.get("given_name"), profile.get("family_name")) if part
+        )
+        try:
+            AccountService().register(
+                "linkedin",
+                account_id,
+                label=label or None,
+                profile_id=profile.get("sub") or account_id,
+            )
+        except Exception:  # noqa: BLE001 - registration must not break OAuth
+            logger.exception("Unable to register LinkedIn account %s", account_id)
 
         logger.info("LinkedIn OAuth completed for account %s", account_id)
 
@@ -177,6 +191,12 @@ async def x_oauth_callback(
     if not account_id:
         raise HTTPException(status_code=502, detail="X did not return an account id")
     XTokenService().save(account_id, token)
+    try:
+        AccountService().register(
+            "x", account_id, label=me.get("username"), profile_id=account_id
+        )
+    except Exception:  # noqa: BLE001 - registration must not break OAuth
+        logger.exception("Unable to register X account %s", account_id)
     audit_logger.log(actor_id="oauth:x", tool="oauth_x_connect", payload_hash=hashlib.sha256(account_id.encode()).hexdigest()[:32], result="success")
     return {"status": "connected", "account_id": account_id, "username": me.get("username")}
 

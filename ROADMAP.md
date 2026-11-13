@@ -105,10 +105,10 @@
 - [ ] Batch operations
 
 ### 6. Multi-Account Support
-- [ ] Multiple accounts per platform
-- [ ] Account switching
-- [ ] Account health monitoring
-- [ ] Token refresh automation
+- [x] Multiple accounts per platform
+- [x] Account switching (`--account-id` / `account_id`, `list_accounts`, `smo accounts`)
+- [ ] Account health monitoring (status and connection state exposed; no automatic checks yet)
+- [x] Token refresh automation (LinkedIn and X, with a cross-process lease)
 
 ---
 

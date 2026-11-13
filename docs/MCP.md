@@ -32,7 +32,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 | Scope | Tools |
 |---|---|
-| `read` | `get_health`, `list_drafts`, `get_draft`, `get_metrics`, `get_queue` |
+| `read` | `get_health`, `list_accounts`, `list_drafts`, `get_draft`, `get_metrics`, `get_queue` |
 | `content` | `generate_content`, `generate_image`, `attach_image`, `approve_draft`, `reject_draft`, `schedule_post` |
 | `control` | `publish_now`, `pause_platform`, `resume_platform`, `trigger_metrics_poll` |
 | `admin` | `set_config`, `rotate_tokens` |
@@ -99,6 +99,7 @@ readable message.
 | Tool | Arguments | Returns |
 |---|---|---|
 | `get_health` | — | `status`, `dry_run`, `human_gate`, `platforms` (`active`, `paused`, `circuit_open`) |
+| `list_accounts` | `platform?` | `accounts[]` with `platform`, `account_id`, `label`, `profile_id`, `status`, `connected`, `scheduling` |
 | `list_drafts` | `status="draft"`, `limit=20` (max 100) | `drafts[]` with `id`, `platform`, `status`, `text`, `media_ref`, `created_at` |
 | `get_draft` | `content_id` | one item in the same shape |
 | `get_metrics` | `content_id?`, `limit=20` | `metrics[]` with `likes`, `views`, `reach`, `timestamp` |
@@ -113,7 +114,7 @@ readable message.
 | `attach_image` | `content_id`, exactly one of `path` (under `data/inputs`) or `data_base64` | `path`, `bytes`. PNG, JPEG or WebP by signature, max 8 MiB |
 | `approve_draft` | `content_id` | the approved item. Only `draft` items can be approved; moderation runs again |
 | `reject_draft` | `content_id`, `reason` (required) | the rejected item. The reason is written to the audit log only |
-| `schedule_post` | `content_id`, `account_id`, `strategy="fixed_slots"`, `at?` (ISO 8601), `timezone="UTC"`, `slots?` (`["09:00","17:00"]`), `window?` (`"09:00-12:00"`) | `job_id`, `status`, `run_at`. The item must be `approved` |
+| `schedule_post` | `content_id`, `account_id`, `strategy?` (default: account config, then `fixed_slots`), `at?` (ISO 8601), `timezone?` (default: account config, then `UTC`), `slots?` (`["09:00","17:00"]`), `window?` (`"09:00-12:00"`) | `job_id`, `status`, `run_at`. The item must be `approved`; unknown or paused accounts are refused |
 
 See [SCHEDULING.md](SCHEDULING.md) for the strategies and what happens after a job is queued.
 
@@ -145,9 +146,10 @@ These are refused with an `immutable` error (REC-002):
 - `budget_per_day_usd`
 - MCP scopes
 
-Values are type-checked before they are stored. Today `brand_voice` is read by
-the draft generator; the other keys are stored but not yet read by the rest of
-the code.
+Values are type-checked before they are stored. `brand_voice` is read by the draft
+generator, and `accounts` provides the per-platform scheduling defaults used by
+`schedule_post` (`strategy`, `timezone`); the other keys are stored but not yet
+read by the rest of the code.
 
 `rotate_tokens` does not rotate the master encryption key (`SMO_MASTER_KEY`).
 

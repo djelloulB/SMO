@@ -37,6 +37,7 @@ class Account(Base):
     id = Column(Integer, primary_key=True)
     platform = Column(String(64), nullable=False)
     handle = Column(String(256), nullable=False)
+    label = Column(String(256), nullable=True)
     profile_id = Column(String(256), nullable=True)
     status = Column(String(32), default="active")  # active, paused, failed
     created_at = Column(DateTime, default=datetime.now)
@@ -241,6 +242,7 @@ class SQLiteStore:
             },
         )
         self._add_missing_columns("variants", {"external_id": "VARCHAR(256)"})
+        self._add_missing_columns("accounts", {"label": "VARCHAR(256)"})
         self._add_missing_columns(
             "platform_tokens",
             {"version": "INTEGER NOT NULL DEFAULT 0", "refresh_lease_until": "DATETIME"},

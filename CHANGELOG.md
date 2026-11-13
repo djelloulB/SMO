@@ -89,6 +89,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `X-Dashboard-Token` header matching `SMO_DASHBOARD_TOKEN` (503 when unset, 401 when
   wrong). Actions are audited in `audit_actions` with the `dashboard` actor. The Posts
   page gains an *Awaiting approval* tab and the approve/reject buttons.
+- **Multi-account registry** (`smo/services/account_service.py`): the `accounts`
+  table (now with a `label`) stores one row per platform account. LinkedIn and X
+  OAuth callbacks register accounts automatically; `smo accounts`, `accounts-add`
+  and `accounts-status` manage the rest. `list_accounts` (read scope) returns the
+  status, connection state and scheduling defaults of each account. Publishing and
+  scheduling refuse unknown ids once a platform has a registry, and paused accounts
+  always. Per-platform `strategy`/`timezone` defaults can be set in the mutable
+  `ACCOUNTS` config.
 - **Draft generation** (`smo/content/generator.py`): local Ollama through
   `langchain-ollama`, prompt built from the brand voice and platform limits, output
   moderated and kept as a draft.

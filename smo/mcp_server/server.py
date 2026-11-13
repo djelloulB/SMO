@@ -1,8 +1,7 @@
 """MCP server (stdio) exposing SMO use-cases to external agents (FR-14).
 
 Tools are registered according to the authenticated agent's scopes. Mutating
-tools are audited (REC-008). Only ``read`` and ``content`` tools exist yet;
-``control`` and ``admin`` tools are Phase 3.
+tools are audited (REC-008).
 """
 import hashlib
 import json
@@ -22,6 +21,7 @@ from ..content.images import ImageError, get_image_provider
 from ..memory.sqlite_store import SQLiteStore
 from ..security.audit import audit_logger
 from ..services.budget_service import BudgetExceeded, BudgetService
+from ..services.account_service import AccountService, scheduling_defaults
 from ..services.config_service import ConfigService
 from ..services.content_service import ContentError, ContentService
 from ..services.image_service import ImageService
@@ -95,6 +95,25 @@ def build_server(identity: Identity, generator=None) -> FastMCP:
                     "limit_usd": BudgetService(store).limit_usd,
                     "remaining_today_usd": BudgetService(store).remaining_today(),
                 },
+            }
+
+        @mcp.tool()
+        def list_accounts(platform: Optional[str] = None) -> dict:
+            """List registered platform accounts with their status and connection state."""
+            service = AccountService(store)
+            return {
+                "accounts": [
+                    {
+                        "platform": account.platform,
+                        "account_id": account.account_id,
+                        "label": account.label,
+                        "profile_id": account.profile_id,
+                        "status": account.status,
+                        "connected": service.connected(account.platform, account.account_id),
+                        "scheduling": scheduling_defaults(account.platform, store),
+                    }
+                    for account in service.list(platform)
+                ]
             }
 
         @mcp.tool()
@@ -239,14 +258,16 @@ def build_server(identity: Identity, generator=None) -> FastMCP:
         def schedule_post(
             content_id: int,
             account_id: str,
-            strategy: str = "fixed_slots",
+            strategy: Optional[str] = None,
             at: Optional[str] = None,
-            timezone: str = "UTC",
+            timezone: Optional[str] = None,
             slots: Optional[list[str]] = None,
             window: Optional[str] = None,
         ) -> dict:
-            """Schedule an approved draft. strategy: fixed_slots, randomized_window or weighted_by_engagement.
-            ``at`` is an ISO 8601 datetime (overrides the strategy). ``slots`` are HH:MM, ``window`` is HH:MM-HH:MM."""
+            """Schedule an approved draft. strategy: fixed_slots, randomized_window or weighted_by_engagement
+            (default: the account config, then fixed_slots). ``at`` is an ISO 8601 datetime (overrides the
+            strategy). ``slots`` are HH:MM, ``window`` is HH:MM-HH:MM, ``timezone`` defaults to the account
+            config or UTC."""
             try:
                 run_at = datetime.fromisoformat(at) if at else None
                 job = scheduling.schedule(

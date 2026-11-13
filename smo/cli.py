@@ -241,6 +241,65 @@ def linkedin_status() -> None:
             typer.echo("No connected accounts")
 
 
+# --- Accounts (multi-account registry) ---
+@app_cli.command()
+def accounts(
+    platform: Optional[str] = typer.Option(None, "--platform", "-p", help="Filter by platform"),
+) -> None:
+    """List registered accounts and whether their tokens are connected."""
+    from smo.services.account_service import AccountService
+
+    service = AccountService()
+    rows = service.list(platform)
+    if not rows:
+        typer.echo("No accounts registered. Connect a platform or run 'smo accounts-add'.")
+        return
+    for account in rows:
+        connected = "yes" if service.connected(account.platform, account.account_id) else "no"
+        label = f"  {account.label}" if account.label else ""
+        typer.echo(
+            f"  {account.platform:<10} {account.account_id:<28} "
+            f"{account.status:<7} connected={connected}{label}"
+        )
+
+
+@app_cli.command(name="accounts-add")
+def accounts_add(
+    platform: str = typer.Option(..., "--platform", "-p", help="Platform name (linkedin, x, wordpress)"),
+    account_id: str = typer.Option(..., "--account-id", "-a", help="Account ID used when publishing"),
+    label: Optional[str] = typer.Option(None, "--label", help="Human-readable name"),
+    profile_id: Optional[str] = typer.Option(None, "--profile-id", help="Platform-side profile ID"),
+) -> None:
+    """Register an account manually (WordPress, or a connection made before the registry)."""
+    from smo.services.account_service import AccountError, AccountService
+
+    try:
+        info = AccountService().register(
+            platform, account_id, label=label, profile_id=profile_id
+        )
+    except AccountError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1)
+    typer.echo(f"Registered {info.platform} account {info.account_id}.")
+
+
+@app_cli.command(name="accounts-status")
+def accounts_status(
+    platform: str = typer.Option(..., "--platform", "-p"),
+    account_id: str = typer.Option(..., "--account-id", "-a"),
+    status: str = typer.Option(..., "--status", "-s", help="active, paused or failed"),
+) -> None:
+    """Pause or resume a registered account (paused accounts cannot publish)."""
+    from smo.services.account_service import AccountError, AccountService
+
+    try:
+        info = AccountService().set_status(platform, account_id, status)
+    except AccountError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(1)
+    typer.echo(f"{info.platform} account {info.account_id} is now {info.status}.")
+
+
 # --- Content workflow commands ---
 @app_cli.command()
 def ingest(
@@ -393,11 +452,16 @@ def publish(
 def schedule(
     content_id: int = typer.Argument(..., metavar="ID"),
     account_id: str = typer.Option(..., "--account-id", "-a", help="LinkedIn account ID"),
-    strategy: str = typer.Option(
-        "fixed_slots", "--strategy", "-s", help="fixed_slots, randomized_window or weighted_by_engagement"
+    strategy: Optional[str] = typer.Option(
+        None,
+        "--strategy",
+        "-s",
+        help="fixed_slots, randomized_window or weighted_by_engagement (default: account config, then fixed_slots)",
     ),
     at: Optional[str] = typer.Option(None, "--at", help="ISO 8601 datetime (overrides the strategy)"),
-    timezone_name: str = typer.Option("UTC", "--timezone", "-z", help="IANA timezone, e.g. Europe/Paris"),
+    timezone_name: Optional[str] = typer.Option(
+        None, "--timezone", "-z", help="IANA timezone (default: account config, then UTC)"
+    ),
     slots: Optional[list[str]] = typer.Option(None, "--slot", help="HH:MM for fixed_slots (repeatable)"),
     window: Optional[str] = typer.Option(None, "--window", help="HH:MM-HH:MM for randomized_window"),
     organization_id: Optional[str] = typer.Option(None, "--organization-id", "-o", help="Publish as this organization"),

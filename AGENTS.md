@@ -51,7 +51,7 @@ Cette séparation garantit que l'orchestrateur reste déterministe et traçable.
 
 | Scope | Outils |
 |---|---|
-| `read` (défaut) | `get_health`, `get_queue`, `list_drafts`, `get_draft`, `get_metrics` (`list_accounts` et `get_last_trend_report` ne sont pas encore implémentés) |
+| `read` (défaut) | `get_health`, `list_accounts`, `get_queue`, `list_drafts`, `get_draft`, `get_metrics` (`get_last_trend_report` n'est pas encore implémenté) |
 | `content` | `generate_content`, `approve_draft`, `reject_draft`, `schedule_post` |
 | `control` | `publish_now`, `pause_platform`, `resume_platform`, `trigger_metrics_poll` |
 | `admin` | `set_config`, `rotate_tokens` (très restreint, voir immutabilité ci-dessous) |

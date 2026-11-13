@@ -142,6 +142,35 @@ def test_approve_unknown_content_returns_404(tmp_db, monkeypatch):
     assert response.status_code == 404
 
 
+def test_linkedin_callback_registers_the_account(tmp_db, monkeypatch):
+    import time
+
+    from smo.connectors.linkedin import LinkedInToken
+    from smo.services.account_service import AccountService
+
+    class FakeConnector:
+        async def exchange_code_for_token(self, code, verifier):
+            return LinkedInToken("access", None, int(time.time()) + 3600)
+
+        async def get_profile(self, token):
+            return {"id": "urn:li:person:abc", "sub": "urn:li:person:abc", "name": "Alice"}
+
+        def save_token(self, account_id, token):
+            pass
+
+    monkeypatch.setattr(oauth_module, "get_linkedin_connector", lambda: FakeConnector())
+    oauth_module._state_store["state-register"] = {"code_verifier": "verifier"}
+
+    response = client.get(
+        "/oauth/linkedin/callback", params={"code": "abc", "state": "state-register"}
+    )
+
+    assert response.status_code == 200
+    accounts = AccountService(SQLiteStore(tmp_db)).list("linkedin")
+    assert [account.account_id for account in accounts] == ["urn:li:person:abc"]
+    assert accounts[0].label == "Alice"
+
+
 def test_publish_returns_503_when_not_configured(monkeypatch):
     monkeypatch.setattr(api_module, "get_linkedin_connector", lambda: None)
 

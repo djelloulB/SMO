@@ -10,6 +10,7 @@ Autonomous social media orchestration agent with built-in security, multi-platfo
 - **Security-first**: Immutable controls (REC-002), audit logging (REC-008), dry-run mode, human gate
 - **Containerized**: Podman/Docker with multi-stage build (frontend + backend in one image)
 - **MCP server**: stdio and HTTP (`/mcp`) with per-agent keys and scopes, see [docs/MCP.md](docs/MCP.md)
+- **Multi-account**: one registry per platform, account pause/resume and per-platform scheduling defaults
 - **Scheduling**: fixed slots, randomized windows and self-optimizing engagement-weighted times, dispatched in-process, see [docs/SCHEDULING.md](docs/SCHEDULING.md)
 - **Reliability**: retries with exponential backoff, dead-letter queue and per-platform circuit breaker
 
@@ -198,6 +199,36 @@ venv\Scripts\python -m smo.cli daemon
 Failed publications are retried with backoff (transient errors only), then moved
 to the dead-letter queue. Platforms are held after repeated failures. Details,
 statuses and limits: [docs/SCHEDULING.md](docs/SCHEDULING.md).
+
+## Multiple accounts
+
+Accounts are registered in the `accounts` table. The LinkedIn and X OAuth
+callbacks do it automatically; WordPress sites and connections made before the
+registry can be added by hand. The account id is the value passed with
+`--account-id` (CLI) or `account_id` (MCP):
+
+```bash
+# List accounts, connection state and status
+venv\Scripts\python -m smo.cli accounts --platform linkedin
+
+# Register an account manually (WordPress site, legacy connection)
+venv\Scripts\python -m smo.cli accounts-add -p wordpress -a https://blog.example.com --label "Blog"
+
+# Pause an account: publishing and scheduling are refused until it is resumed
+venv\Scripts\python -m smo.cli accounts-status -p x -a 42 -s paused
+```
+
+Once a platform has a registry, publishing and scheduling refuse unknown ids
+(typos) and paused accounts. A platform with no registry keeps accepting any
+account id, so existing setups need no migration.
+
+Each platform can define scheduling defaults in the mutable `ACCOUNTS` config.
+They are used when `schedule` / `schedule_post` receive no explicit strategy or
+timezone:
+
+```dotenv
+ACCOUNTS={"linkedin": {"enabled": true, "scheduling": {"strategy": "weighted_by_engagement", "timezone": "Europe/Paris"}}}
+```
 
 ## MCP control plane
 

@@ -20,6 +20,7 @@ from ..utils.safeio import (
     sanitize_filename,
 )
 from .content_service import ContentError, ContentService, InvalidTransition
+from .account_service import AccountService
 from .media_service import MAX_MEDIA_BYTES, mime_type_for, sniff_extension
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,9 @@ class PublishingService:
                 f"content {content_id} is '{record.status}'; approve it before publishing "
                 "(human gate)"
             )
+
+        platform = record.platform or "linkedin"
+        AccountService(self.content.store).require_active(platform, account_id)
 
         text = record.variant_text or record.text
         moderation = moderate(text, record.platform or "linkedin")

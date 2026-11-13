@@ -31,7 +31,7 @@
 - [x] Implement self-optimizing schedule
 - [x] Add admin MCP tools
 - [ ] Implement webhook support (optional)
-- [ ] Multi-account support
+- [x] Multi-account support (registry, `list_accounts`, per-account scheduling defaults, paused accounts refused)
 
 ## Security (Ongoing)
 
@@ -54,7 +54,7 @@
 ## Infrastructure
 
 - [ ] CI/CD pipeline (workflows exist, need to be tracked/validated)
-- [x] Automated tests (pytest, 238 tests, 82% coverage)
+- [x] Automated tests (pytest, 254 tests, 82% coverage)
 - [ ] Code quality checks (ruff/black not enforced yet)
 - [ ] Security scanning
 - [ ] Release automation

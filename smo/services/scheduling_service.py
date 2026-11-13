@@ -27,6 +27,7 @@ from ..security.audit import audit_logger
 from .content_service import ContentError, ContentService, InvalidTransition
 from .platform_service import PlatformService
 from .publishing_service import PublishingService
+from .account_service import AccountService, scheduling_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -326,9 +327,9 @@ class SchedulingService:
         self,
         content_id: int,
         account_id: str,
-        strategy: str = "fixed_slots",
+        strategy: Optional[str] = None,
         at: Optional[datetime] = None,
-        timezone_name: str = "UTC",
+        timezone_name: Optional[str] = None,
         slots: Optional[list[str]] = None,
         window: Optional[str] = None,
         organization_id: Optional[str] = None,
@@ -347,6 +348,10 @@ class SchedulingService:
             )
 
         platform = record.platform or "linkedin"
+        defaults = scheduling_defaults(platform, self.store)
+        strategy = strategy or defaults.get("strategy") or "fixed_slots"
+        timezone_name = timezone_name or defaults.get("timezone") or "UTC"
+        AccountService(self.store).require_active(platform, account_id)
         now = now or datetime.now(timezone.utc)
         if at is not None:
             run_at = (at if at.tzinfo else at.replace(tzinfo=_zone(timezone_name))).astimezone(timezone.utc)

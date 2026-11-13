@@ -241,6 +241,7 @@ CREATE TABLE accounts (
     id INTEGER PRIMARY KEY,
     platform TEXT NOT NULL,
     handle TEXT NOT NULL,
+    label TEXT,
     profile_id TEXT,
     status TEXT DEFAULT 'active',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
